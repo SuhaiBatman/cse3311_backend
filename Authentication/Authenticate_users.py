@@ -10,7 +10,6 @@ credentials = {
     'password': password
 }
 
-# Send a POST request to the backend endpoint to authenticate the user
 try:
     response = requests.post(backend_endpoint_url, json=credentials)
 

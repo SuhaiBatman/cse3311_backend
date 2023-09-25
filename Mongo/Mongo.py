@@ -1,6 +1,10 @@
 import pymongo
+from dotenv import load_dotenv
+import os
 
-connection_string = "mongodb+srv://SuhaiBatmman:CSE-3311-password-5458@cse-3311-cluster.m7tu4qj.mongodb.net/"
+load_dotenv()
+
+connection_string = os.getenv("MONGO_URL")
 
 try:
     client = pymongo.MongoClient(connection_string)
@@ -9,10 +13,10 @@ try:
 
     print("Connected to MongoDB Atlas")
 
-    collection = db['listingsAndReviews']
-    documents = collection.find_one({"name": "Dhrutik Solanki"})
+    collection = db['Users']
+    ## insert = collection.insert_one({"name": "Suhaib Hasan"})
+    documents = collection.find_one({"name": "Suhaib Hasan"})
 
-    print(documents)
     print(documents)
 
     client.close()
