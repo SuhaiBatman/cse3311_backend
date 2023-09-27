@@ -9,7 +9,7 @@ credentials = {
     'username': username,
     'password': password
 }
-
+#authenticate user login
 try:
     response = requests.post(backend_endpoint_url, json=credentials)
 

@@ -13,10 +13,11 @@ app.secret_key = 'cse-3311-secret-key'
 
 oauth = OAuth(app)
 
+#Google connection
 google = oauth.remote_app(
     'google',
-    consumer_key = os.getenv("CLIENT_ID"),
-    consumer_secret= os.getenv("CLIENT_SECRET"),
+    consumer_key = os.getenv("CLIENT_ID"), #Given by cloud
+    consumer_secret= os.getenv("CLIENT_SECRET"), #Given by cloud
     request_token_params = {
         'scope': 'email',  # might need user info too
     },
@@ -27,7 +28,7 @@ google = oauth.remote_app(
     authorize_url = 'https://accounts.google.com/o/oauth2/auth',
 )
 
-
+#router for connection
 @app.route('/')
 def index():
     if 'google_token' in session:
@@ -35,18 +36,18 @@ def index():
         return f'Logged in as: {user_info["email"]}'
     return 'Not logged in. <a href="/login">Login with Google</a>'
 
-
+#Authorize login
 @app.route('/login')
 def login():
     return google.authorize(callback=url_for('authorized', _external=True))
 
-
+#logout
 @app.route('/logout')
 def logout():
     session.pop('google_token', None)
     return redirect(url_for('index'))
 
-
+#successful login
 @app.route('/login/authorized')
 def authorized():
     resp = google.authorized_response()
@@ -61,12 +62,12 @@ def authorized():
     user_info = get_google_user_info()
     return f'Successfully logged in as {user_info["email"]}'
 
-
+#retrieve token from Google
 @google.tokengetter
 def get_google_oauth_token():
     return session.get('google_token')
 
-
+#get user info
 def get_google_user_info():
     headers = {'Authorization': f'Bearer {get_google_oauth_token()[0]}'}
     response = requests.get('https://www.googleapis.com/oauth2/v1/userinfo', headers=headers)
