@@ -1,6 +1,5 @@
 import os
 import pathlib
-#test
 import requests
 from flask import Flask, session, abort, redirect, request
 from google.oauth2 import id_token
@@ -13,7 +12,7 @@ app.secret_key = "CodeSpecialist.com"
 
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-GOOGLE_CLIENT_ID = "1079550904724-r04lienf30qi77ard9uuafbdeupi2olf.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 client_secrets_file = os.path.join(pathlib.Path(__file__).parent, "client_secret.json")
 
 flow = Flow.from_client_secrets_file(
@@ -40,9 +39,6 @@ def login():
     return redirect(authorization_url)
 
 def validate(auth_token):
-    """
-    validate method Queries the Google oAUTH2 api to fetch the user info
-    """
     try:
         idinfo = id_token.verify_oauth2_token(
             auth_token, requests.Request(), clock_skew_in_seconds=10)
