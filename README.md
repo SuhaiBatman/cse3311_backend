@@ -1,10 +1,10 @@
 pip install -r requirements.txt
 
-FOR AUTHENTICATION:
-cd Authentcation
-python3 Google_OAuth.py
-    -go to http://localhost:3000 on browser
+FOR AUTHENTICATION: <br />
+cd Authentcation <br />
+python3 Google_OAuth.py <br />
+    -go to http://localhost:3000 on browser <br />
 
-FOR MONGODB:
-cd Mongo
+FOR MONGODB: <br />
+cd Mongo <br />
 python3 Mongo.py
