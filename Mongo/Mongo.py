@@ -9,7 +9,7 @@ connection_string = os.getenv("MONGO_URL") ##gets the MongoURL
 try:
     client = pymongo.MongoClient(connection_string) ##Connect to the MongoDB
 
-    db = client.get_database('cse-3311-cluster')##
+    db = client.get_database('cse-3311-cluster')
 
     print("Connected to MongoDB Atlas")
 
