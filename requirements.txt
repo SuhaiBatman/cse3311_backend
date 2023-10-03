@@ -10,8 +10,7 @@ charset-normalizer==3.3.0
 click==8.1.7
 command-not-found==0.3
 cryptography==41.0.4
-dbus-python==1.2.18
-distro-info===1.1build1
+distro-info==1.0
 dnspython==2.4.2
 Flask==3.0.0
 Flask-Login==0.6.2
@@ -37,12 +36,9 @@ protobuf==4.24.3
 pyasn1==0.5.0
 pyasn1-modules==0.3.0
 pycparser==2.21
-PyGObject==3.42.1
 PyJWT==2.3.0
 pymongo==4.5.0
-pyOpenSSL==23.2.0
 pyparsing==3.1.1
-python-apt==2.4.0+ubuntu1
 python-dotenv==1.0.0
 PyYAML==5.4.1
 requests==2.31.0
@@ -51,8 +47,6 @@ rsa==4.9
 six==1.16.0
 soupsieve==2.5
 systemd-python==234
-ufw==0.36.1
 unattended-upgrades==0.1
 uritemplate==4.1.1
 urllib3==2.0.5
-Werkzeug==3.0.0
