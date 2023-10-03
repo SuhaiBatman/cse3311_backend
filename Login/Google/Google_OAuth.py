@@ -21,7 +21,6 @@ flow = Flow.from_client_secrets_file(
     redirect_uri="http://localhost:3000/callback"
 )
 
-
 def login_is_required(function):
     def wrapper(*args, **kwargs):
         if "google_id" not in session:
@@ -31,17 +30,16 @@ def login_is_required(function):
 
     return wrapper
 
-
-@app.route("/login")
+@app.route("/login") ##router login displays the login page
 def login():
-    authorization_url, state = flow.authorization_url()
+    authorization_url, state = flow.authorization_url() ##checks if the states match
     session["state"] = state
     return redirect(authorization_url)
 
-def validate(auth_token):
+def validate(auth_token): ##revalid token if time is off
     try:
         idinfo = id_token.verify_oauth2_token(
-            auth_token, requests.Request(), clock_skew_in_seconds=100)
+            auth_token, requests.Request(), clock_skew_in_seconds=100) ##token skew to offset token response time
 
         if 'accounts.google.com' in idinfo['iss']:
             return idinfo
@@ -49,7 +47,7 @@ def validate(auth_token):
     except:
         return "The token is either invalid or has expired"
 
-@app.route("/callback")
+@app.route("/callback") ##validates token and redirects to Google
 def callback():
     validate(flow.fetch_token(authorization_response=request.url))
 
@@ -61,34 +59,30 @@ def callback():
     cached_session = cachecontrol.CacheControl(request_session)
     token_request = google.auth.transport.requests.Request(session=cached_session)
 
-    id_info = id_token.verify_oauth2_token(
+    id_info = id_token.verify_oauth2_token( ##receive user info and store
         id_token=credentials._id_token,
         request=token_request,
         audience=GOOGLE_CLIENT_ID
     )
 
-    session["google_id"] = id_info.get("sub")
+    session["google_id"] = id_info.get("sub") ##use sessions to display and store user info
     session["name"] = id_info.get("name")
     session["email"] = id_info.get("email")
     return redirect("/protected_area")
 
-
-@app.route("/logout")
+@app.route("/logout") ##logout
 def logout():
     session.clear()
     return redirect("/")
 
-
-@app.route("/")
+@app.route("/") ##login page when app first starts
 def index():
-    return "Hello World <a href='/login'><button>Login</button></a>"
+    return "Welcome to PixEra <a href='/login'><button>Login</button></a>"
 
-
-@app.route("/protected_area")
+@app.route("/protected_area") ##should be landing page
 @login_is_required
 def protected_area():
     return f"Hello {session['name']}! Hello {session['email']}! <br/> <a href='/logout'><button>Logout</button></a>"
-
 
 if __name__ == "__main__":
     app.run(debug=True, host = "localhost", port = 3000)
