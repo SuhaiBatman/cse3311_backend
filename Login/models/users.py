@@ -10,8 +10,8 @@ class UserCreate(BaseModel): ##basic info we will need from user
     pnumber: str
     fName: str
     lName: str
-    address: str ##format: street address
-    uType: Optional[str] = 'free'
+    address: str
+    uType: Optional[str] = 'user'
     
     @staticmethod
     def validate_obj(obj: 'UserCreate', **kwargs) -> bool: ##validate if it is an object
