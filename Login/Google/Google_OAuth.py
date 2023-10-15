@@ -104,8 +104,6 @@ def verify():
             return "Token has expired", 401
         else:
             return decoded_token
-    except jwt.ExpiredSignatureError:
-        return "Token has expired", 401
     except jwt.DecodeError:
         return "Invalid token", 401
 

@@ -1,121 +1,112 @@
 import os
-
 from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_pymongo import PyMongo
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
-from flask_user import UserManager, current_user
-from datetime import datetime, timedelta
+from flask_mail import Mail, Message
+import random
+import string
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY")
-app.config['MONGO_URI'] = os.getenv("MONGO_URL")
-mongo = PyMongo(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
 
-class User(UserMixin):
-    def __init__(self, user_id):
-        self.id = user_id
+mongo_client = MongoClient(os.getenv("MONGO_URL"), server_api=ServerApi('1'))
+db = mongo_client['PixEraDB']
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User(user_id)
+# MongoDB collection for user data
+users_collection = db['Users']
 
-app.config['MAIL_SERVER'] = 'smtp.your-email-provider.com' ##configs to send mail to user
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USERNAME'] = 'your-email@example.com'
-app.config['MAIL_PASSWORD'] = 'your-email-password'
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
+# Store reset tokens and their corresponding email
+reset_tokens = {}
 
-class User(UserMixin):
-    def __init__(self, user_id, reset_token=None, reset_token_expiration=None):
-        self.id = user_id
-        self.reset_token = reset_token
-        self.reset_token_expiration = reset_token_expiration
 
-    def is_reset_token_valid(self): ##if reset token expires
-        if self.reset_token_expiration:
-            return self.reset_token_expiration > datetime.now()
-        return False
+@app.route('/')
+def home():
+    return 'Welcome to the Flask Login System'
 
-user_manager = UserManager(app, mongo, User)
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+
+        if users_collection.find_one({'email': email}):
+            flash('Email already registered. Please log in.')
+            return redirect(url_for('login'))
+
+        user_data = {'email': email, 'password': password}
+        users_collection.insert_one(user_data)
+        flash('Account created successfully. Please log in.')
+        return redirect(url_for('login'))
+
+    return render_template('signup.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+
+        user = users_collection.find_one({'email': email, 'password': password})
+
+        if user:
+            flash('Login successful!')
+            return redirect(url_for('home'))
+        else:
+            flash('Login failed. Please check your email and password.')
+
+    return render_template('login.html')
+
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
         email = request.form['email']
-        user = User.query.filter_by(email=email).first()
+        user = users_collection.find_one({'email': email})
 
         if user:
-            # Generate a reset token
-            reset_token = user_manager.generate_reset_password_token(user)
+            # Generate a random reset token
+            token = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
+            reset_tokens[token] = email
 
-            # Send an email with the reset link
-            send_reset_email(user, reset_token)
-            flash('An email with instructions for resetting your password has been sent.', 'info')
-            return redirect(url_for('login'))
+            # Send a reset email with a link using SendGrid
+            reset_link = url_for('reset_password', token=token, _external=True)
+            message = Mail(
+                from_email='dev.pixera@gmail.com',
+                to_emails=[email],
+                subject='Password Reset',
+                plain_text_content=f'To reset your password, click the following link: {reset_link}'
+            )
+
+            try:
+                sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
+                response = sg.send(message)
+                flash('Password reset instructions sent to your email.')
+            except Exception:
+                flash('Failed to send the reset email.')
         else:
-            flash('Email address not found.', 'danger')
-
+            flash('Email not found.')
     return render_template('forgot_password.html')
 
-def send_reset_email(user, token): ##send reset password email
-    reset_link = url_for('reset_password', token=token, _external=True)
-    subject = 'Password Reset Request'
-    body = f'Click the following link to reset your password: {reset_link}'
-    msg = Message(subject, recipients=[user.email], body=body)
-    mail.send(msg)
 
-
-@app.route('/register', methods=['GET', 'POST']) ##users to register through our app and not Google
-def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-
-        existing_user = mongo.db.users.find_one({'username': username})
-
-        if existing_user:
-            flash('Username already exists. Choose a different one.', 'danger')
-        else:
-            hashed_password = generate_password_hash(password, method='sha256')
-            mongo.db.users.insert({'username': username, 'email': email, 'password': hashed_password})
-            flash('Registration successful. You can now log in.', 'success')
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if token in reset_tokens:
+        email = reset_tokens[token]
+        if request.method == 'POST':
+            new_password = request.form['new_password']
+            users_collection.update_one({'email': email}, {'$set': {'password': new_password}})
+            flash('Password reset successfully. You can now log in with your new password.')
+            del reset_tokens[token]
             return redirect(url_for('login'))
+        return render_template('reset_password.html')
+    else:
+        flash('Invalid or expired token.')
+        return redirect(url_for('forgot_password'))
 
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST']) ##User login router
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-
-        user = mongo.db.users.find_one({'username': username}) ##check if user exists
-
-        if user and check_password_hash(user['password'], password): ##check hashed password
-            user_obj = User(username)
-            login_user(user_obj)
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid username or password.', 'danger')
-
-    return render_template('login.html') ##should lead to login template (not created yet)
-
-@app.route('/dashboard') ##take to dashboard
-@login_required
-def dashboard():
-    return f'Hello, {current_user.id}! This is your dashboard.'
-
-@app.route('/logout') ##logout if logged in
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('login')) ##take back to login screen if logged out
 
 if __name__ == '__main__':
+    app.secret_key = os.getenv("SECRET_KEY")
     app.run(debug=True, host = "localhost", port = 3000)
