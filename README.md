@@ -4,7 +4,3 @@ FOR AUTHENTICATION: <br />
 cd Authentcation <br />
 python3 Google_OAuth.py <br />
     -go to http://localhost:3000 on browser <br />
-
-FOR MONGODB: <br />
-cd Mongo <br />
-python3 Mongo.py
