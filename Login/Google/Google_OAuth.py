@@ -22,7 +22,7 @@ client_secrets_file = os.path.join(pathlib.Path(__file__).parent, "client_secret
 flow = Flow.from_client_secrets_file(
     client_secrets_file=client_secrets_file,
     scopes=["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email", "openid"],
-    redirect_uri="http://localhost:3000/callback"
+    redirect_uri="http://localhost:5000/callback"
 )
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -109,4 +109,4 @@ def verify():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="localhost", port=3000)
+    app.run(debug=True, host="localhost", port=5000)

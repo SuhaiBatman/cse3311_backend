@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Two-Factor Authentication Verification</title>
+</head>
+<body>
+    <h2>Two-Factor Authentication Verification</h2>
+    <p>Please enter the verification code sent to your email.</p>
+    <form method="POST">
+        <label for="totp_token">Verification Code:</label>
+        <input type="text" name="totp_token" id="totp_token" required>
+        <br>
+        <button type="submit">Verify</button>
+    </form>
+    <p>If you haven't received the code or it has expired, you can <a href="{{ url_for('resend_2fa', email=email) }}">resend it</a>.</p>
+
+</body>
+</html>
