@@ -48,10 +48,12 @@ def login_is_required(function):
 @app.route("/login")
 def login():
     authorization_url, state = flow.authorization_url()
+    print(authorization_url)
     return redirect(authorization_url)
 
 @app.route("/callback")
 def callback():
+    print("came to callback")
     auth_token = flow.fetch_token(authorization_response=request.url)
 
     def validate_and_get_id_info():
@@ -80,7 +82,9 @@ def callback():
     }
     jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
 
-    return json.dumps({"token": jwt_token})
+    # Redirect to localhost:5000/login with the token as a query parameter
+    return redirect(f'http://localhost:5000/?token={jwt_token}')
+
 
 @app.route("/logout")
 def logout():
