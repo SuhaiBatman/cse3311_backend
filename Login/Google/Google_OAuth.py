@@ -50,7 +50,7 @@ def login_is_required(function):
     return wrapper
 
 @app.route("/login_user")
-def login():
+def login_user():
     authorization_url, state = flow.authorization_url()
     print(authorization_url)
     return redirect(authorization_url)
