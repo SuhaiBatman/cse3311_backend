@@ -10,6 +10,7 @@ import google.auth.transport.requests
 import concurrent.futures
 import jwt
 import time
+import pymongo
 
 app = Flask("Google Login App")
 app.secret_key = os.getenv("APP_SECRET_KEY")
@@ -19,10 +20,13 @@ os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 client_secrets_file = os.path.join(pathlib.Path(__file__).parent, "client_secret.json")
 
+client = pymongo.MongoClient(os.getenv("MONGO_URL"))
+db = client["PixEraDB"]
+
 flow = Flow.from_client_secrets_file(
     client_secrets_file=client_secrets_file,
     scopes=["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email", "openid"],
-    redirect_uri="http://localhost:5000/callback"
+    redirect_uri="http://localhost:3000/callback"
 )
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -45,7 +49,7 @@ def login_is_required(function):
 
     return wrapper
 
-@app.route("/login")
+@app.route("/login_user")
 def login():
     authorization_url, state = flow.authorization_url()
     print(authorization_url)
@@ -73,6 +77,21 @@ def callback():
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         id_info = executor.submit(validate_and_get_id_info).result()
+
+    # Get user's Gmail email
+    user_email = id_info.get("email")
+
+    # Check if the user already exists in the database
+    users_collection = db["Users"]  # Replace with your collection name
+    existing_user = users_collection.find_one({"email": user_email})
+
+    if not existing_user:
+        # If the user doesn't exist, save their information to MongoDB
+        user_data = {
+            "google_id": id_info.get("sub"),
+            "email": user_email
+        }
+        users_collection.insert_one(user_data)
 
     # Create a JWT token and include claims, including "exp" for expiration
     expiration_time = int(time.time()) + 3600  # 1 hour from now
@@ -113,4 +132,4 @@ def verify():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="localhost", port=5000)
+    app.run(debug=True, host="localhost", port=3000)
