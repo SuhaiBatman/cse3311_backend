@@ -112,7 +112,7 @@ def logout():
 
 @app.route("/")
 def index():
-    return "Welcome to PixEra <a href='/login'><button>Login</button></a>"
+    return "Welcome to PixEra <a href='/login_user'><button>Login</button></a>"
 
 @app.route("/verify", methods=["POST"])  # Use POST method to send the JWT token in the request body
 def verify():
