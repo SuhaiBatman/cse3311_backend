@@ -8,8 +8,10 @@ from pymongo.server_api import ServerApi
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 import pyotp
+from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
+bcrypt = Bcrypt(app)
 
 mongo_client = MongoClient(os.getenv("MONGO_URL"), server_api=ServerApi('1'))
 db = mongo_client['PixEraDB']
@@ -29,13 +31,20 @@ def signup():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
+        
+        # Hash the password before storing it
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        
         if users_collection.find_one({'email': email}):
             flash('Email already registered. Please log in.')
             return redirect(url_for('login'))
-        user_data = {'email': email, 'password': password}
+        
+        # Store the hashed password in the database
+        user_data = {'email': email, 'password': hashed_password}
         users_collection.insert_one(user_data)
         flash('Account created successfully. Please log in.')
         return redirect(url_for('login'))
+    
     return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -43,11 +52,14 @@ def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
-        user = users_collection.find_one({'email': email, 'password': password})
-        if user:
+        user = users_collection.find_one({'email': email})
+        
+        if user and bcrypt.check_password_hash(user['password'], password):
+            # The password is verified using check_password_hash
             # Generate a TOTP token
             totp = pyotp.TOTP(totp_secret)
             token = totp.now()
+            
             # Send the TOTP token to the user's email
             message = Mail(
                 from_email='dev.pixera@gmail.com',
@@ -55,17 +67,20 @@ def login():
                 subject='Two-Factor Authentication',
                 plain_text_content=f'Your TOTP token is: {token}'
             )
+            
             try:
                 sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
                 response = sg.send(message)
                 flash('A TOTP token has been sent to your email. Please check your email and enter the token.')
             except Exception:
                 flash('Failed to send the TOTP token.')
-
+            
             # Redirect to the 2FA verification page
             return redirect(url_for('verify_2fa', email=email))
+        
         else:
             flash('Login failed. Please check your email and password.')
+    
     return render_template('login.html')
 
 @app.route('/resend_2fa/<email>', methods=['GET', 'POST'])
@@ -80,12 +95,14 @@ def resend_2fa(email):
             subject='Two-Factor Authentication',
             plain_text_content=f'Your TOTP token is: {token}'
         )
+        
         try:
             sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
             response = sg.send(message)
             flash('A new TOTP token has been sent to your email. Please check your email and enter the token.')
         except Exception:
             flash('Failed to resend the TOTP token.')
+    
     return redirect(url_for('verify_2fa', email=email))
 
 @app.route('/verify_2fa/<email>', methods=['GET', 'POST'])
@@ -93,11 +110,13 @@ def verify_2fa(email):
     if request.method == 'POST':
         totp_token = request.form['totp_token']
         totp = pyotp.TOTP(totp_secret)
+        
         if totp.verify(totp_token):
             flash('2FA verification successful! You are now logged in.')
             return redirect(url_for('home'))
         else:
             flash('2FA verification failed. Please check the TOTP token.')
+    
     return render_template('verify_2fa.html', email=email)
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
@@ -105,11 +124,12 @@ def forgot_password():
     if request.method == 'POST':
         email = request.form['email']
         user = users_collection.find_one({'email': email})
+        
         if user:
             # Generate a random reset token
             token = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
             reset_tokens[token] = email
-
+            
             # Send a reset email with a link using SendGrid
             reset_link = url_for('reset_password', token=token, _external=True)
             message = Mail(
@@ -118,14 +138,17 @@ def forgot_password():
                 subject='Password Reset',
                 plain_text_content=f'To reset your password, click the following link: {reset_link}'
             )
+            
             try:
                 sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
                 response = sg.send(message)
                 flash('Password reset instructions sent to your email.')
             except Exception:
                 flash('Failed to send the reset email.')
+        
         else:
             flash('Email not found.')
+    
     return render_template('forgot_password.html')
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])

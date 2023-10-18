@@ -89,7 +89,8 @@ def callback():
         # If the user doesn't exist, save their information to MongoDB
         user_data = {
             "google_id": id_info.get("sub"),
-            "email": user_email
+            "email": user_email,
+            "password": ""
         }
         users_collection.insert_one(user_data)
 
