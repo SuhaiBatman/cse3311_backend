@@ -31,20 +31,40 @@ def signup():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
+
+        if not email:
+            flash('Email is required.')
+            return redirect(url_for('signup'))
         
-        # Hash the password before storing it
-        hashed_password = bcrypt.generate_password_hash(password).decode(os.getenv("DECODE_ALGORITHM"))
+        # Check if the user already exists
+        user = users_collection.find_one({'email': email})
         
-        if users_collection.find_one({'email': email}):
-            flash('Email already registered. Please log in.')
+        if user:
+            if not password:
+                flash('Password cannot be empty. Please provide a password.')
+                return redirect(url_for('signup'))
+            
+            # Hash the password using bcrypt
+            hashed_password = bcrypt.generate_password_hash(password).decode(os.getenv("DECODE_ALGORITHM"))
+            
+            # Update the user's password
+            users_collection.update_one({'email': email}, {'$set': {'password': hashed_password}})
+            flash('Password updated successfully.')
             return redirect(url_for('login'))
-        
-        # Store the hashed password in the database
-        user_data = {'email': email, 'password': hashed_password}
-        users_collection.insert_one(user_data)
-        flash('Account created successfully. Please log in.')
-        return redirect(url_for('login'))
-    
+        else:
+            if not password:
+                flash('Password is required.')
+                return redirect(url_for('signup'))
+            
+            # Hash the password using bcrypt
+            hashed_password = bcrypt.generate_password_hash(password).decode(os.getenv("DECODE_ALGORITHM"))
+            user_data = {'email': email, 'password': hashed_password}
+
+            # Store the user in the database
+            users_collection.insert_one(user_data)
+            flash('Account created successfully. Please log in.')
+            return redirect(url_for('login'))
+
     return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
