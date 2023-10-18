@@ -33,7 +33,7 @@ def signup():
         password = request.form['password']
         
         # Hash the password before storing it
-        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        hashed_password = bcrypt.generate_password_hash(password).decode(os.getenv("DECODE_ALGORITHM"))
         
         if users_collection.find_one({'email': email}):
             flash('Email already registered. Please log in.')
