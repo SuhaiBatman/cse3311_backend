@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enable Two-Factor Authentication</title>
+</head>
+<body>
+    <h1>Enable Two-Factor Authentication</h1>
+    <p>Follow the steps below to enable Two-Factor Authentication (2FA) for your account:</p>
+
+    <form method="post">
+        <button type="submit">Send 2FA Setup Email</button>
+    </form>
+
+    <p>You will receive an email with a verification code to complete the 2FA setup.</p>
+
+    <a href="{{ url_for('login') }}">Back to Login</a>
+</body>
+</html>
