@@ -1,7 +1,6 @@
 import os
 import pathlib
 import requests
-import json
 from flask import Flask, abort, redirect, request
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
@@ -11,6 +10,7 @@ import concurrent.futures
 import jwt
 import time
 import pymongo
+import json
 
 app = Flask("Google Login App")
 app.secret_key = os.getenv("APP_SECRET_KEY")
