@@ -1,41 +1,31 @@
-import os
-from flask import Flask, request, render_template
-from google.cloud import storage
+import boto3
+from botocore.exceptions import NoCredentialsError
 
-app = Flask(__name__)
+# DigitalOcean Spaces credentials
+access_key = 'your_access_key'
+secret_key = 'your_secret_key'
+space_name = 'your_space_name'
 
-# Configure the Google Cloud Storage client
-client = storage.Client.from_service_account_json("PixEra_GCP.json")
-bucket = client.get_bucket("your-bucket-name")
+def upload_file_to_do_spaces(file_path, key):
+    try:
+        s3 = boto3.client('s3',
+            endpoint_url='https://your-space-name.nyc3.digitaloceanspaces.com',
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key
+        )
 
-@app.route('/upload_photo_to_GCP', methods=['GET', 'POST'])
-def upload_photo_to_GCP():
-    if request.method == 'POST':
-        # Get form data
-        title = request.form['title']
-        description = request.form['description']
-        tags = request.form['tags']
-        file = request.files['file']
+        s3.upload_file(file_path, space_name, key)
+        return True
+    except NoCredentialsError:
+        print("No AWS credentials found")
+        return False
 
-        if file:
-            # Create a unique filename
-            filename = os.path.join('uploads', file.filename)
-            blob = bucket.blob(filename)
+if __name__ == "__main__":
+    file_path = 'path_to_your_photo.jpg'  # Replace with the actual path of your photo
+    key = 'uploads/photo.jpg'  # The key under which the file will be stored in DigitalOcean Spaces
 
-            # Upload the file to Google Cloud Storage
-            blob.upload_from_string(file.read(), content_type=file.content_type)
-
-            # Store metadata (title, description, tags) as metadata on the GCS object
-            blob.metadata = {
-                'title': title,
-                'description': description,
-                'tags': tags
-            }
-            blob.patch()
-
-            return "File uploaded successfully!"
-    
-    return render_template('upload_form.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    success = upload_file_to_do_spaces(file_path, key)
+    if success:
+        print(f"File {file_path} uploaded successfully to DigitalOcean Spaces.")
+    else:
+        print("File upload failed.")

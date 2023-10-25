@@ -1,3 +1,6 @@
+from datetime import timedelta
+import datetime
+from datetime import datetime
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_mail import Mail, Message
@@ -31,9 +34,10 @@ def signup():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
+        captcha_checked = request.form.get('captcha_checkbox')  # Check if the checkbox is checked
 
-        if not email:
-            flash('Email is required.')
+        if not captcha_checked:
+            flash("Please complete the CAPTCHA.")
             return redirect(url_for('signup'))
         
         # Check if the user already exists
@@ -47,22 +51,23 @@ def signup():
                 users_collection.update_one({'email': email}, {'$set': {'password': hashed_password}})
                 flash('Password updated successfully.')
                 return redirect(url_for('login'))
-            elif bcrypt.check_password_hash(user['password'], password):
-                flash("user already has an account. Please log in")
+            else:
+                flash("User already exists")
                 return redirect(url_for('login'))
         else:
-            if not password:
-                flash('Password is required.')
-                return redirect(url_for('signup'))
-            
+            users_collection.create_index("expirationDate", expireAfterSeconds=0)
+
+            # Insert a document with an expiration date
+            # The document will be automatically deleted after the expiration date has passed.
+            expiration_date = datetime.utcnow() + timedelta(seconds=120)  # Set the expiration date to one hour from now
             # Hash the password using bcrypt
             hashed_password = bcrypt.generate_password_hash(password).decode(os.getenv("DECODE_ALGORITHM"))
-            user_data = {'email': email, 'password': hashed_password}
+            user_data = {'email': email, 'password': hashed_password, "expirationDate": expiration_date}
 
             # Store the user in the database
             users_collection.insert_one(user_data)
             flash('Account created successfully. Please log in.')
-            return redirect(url_for('login'))
+            return redirect(url_for('resend_2fa', email=email))
 
     return render_template('signup.html')
 
@@ -74,11 +79,6 @@ def login():
         user = users_collection.find_one({'email': email})
         
         if user:
-            # Check if the password field is not empty
-            if not password:
-                flash('Password cannot be empty. Please provide a password.')
-                return redirect(url_for('login'))
-            
             # Verify the password using check_password_hash
             if user["password"] != "":
                 if bcrypt.check_password_hash(user['password'], password):
@@ -136,15 +136,16 @@ def resend_2fa(email):
 @app.route('/verify_2fa/<email>', methods=['GET', 'POST'])
 def verify_2fa(email):
     if request.method == 'POST':
+        user = users_collection.find_one({'email': email})
         totp_token = request.form['totp_token']
-        totp = pyotp.TOTP(totp_secret)
-        
+        totp = pyotp.TOTP(totp_secret) 
         if totp.verify(totp_token):
+            password = user["password"]
             flash('2FA verification successful! You are now logged in.')
+            users_collection.update_one({'email': email}, {'$unset': {'expirationDate': 1}})
             return redirect(url_for('home'))
         else:
             flash('2FA verification failed. Please check the TOTP token.')
-    
     return render_template('verify_2fa.html', email=email)
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
@@ -152,7 +153,6 @@ def forgot_password():
     if request.method == 'POST':
         email = request.form['email']
         user = users_collection.find_one({'email': email})
-        
         if user:
             # Generate a random reset token
             token = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
@@ -173,7 +173,6 @@ def forgot_password():
                 flash('Password reset instructions sent to your email.')
             except Exception:
                 flash('Failed to send the reset email.')
-        
         else:
             flash('Email not found.')
     
@@ -185,7 +184,6 @@ def reset_password(token):
         email = reset_tokens[token]
         if request.method == 'POST':
             new_password = request.form['new_password']
-            
             if not new_password:
                 flash('Password is required.')
                 return redirect(url_for('reset_password', token=token))
