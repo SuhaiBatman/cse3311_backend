@@ -308,4 +308,4 @@ def verify():
 
 if __name__ == '__main__':
     app.secret_key = os.getenv("SECRET_KEY")
-    app.run(debug=True, host = "localhost", port = 3000)
+    app.run(host = "localhost", port = 3000)

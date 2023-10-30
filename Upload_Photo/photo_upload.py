@@ -1,10 +1,11 @@
 import boto3
+import os
 from botocore.exceptions import NoCredentialsError
 
 # DigitalOcean Spaces credentials
-access_key = 'your_access_key'
-secret_key = 'your_secret_key'
-space_name = 'your_space_name'
+access_key = os.getenv("DO_ACCESS_KEY")
+secret_key = os.getenv("DO_SECRET_KEY")
+space_name = 'PixEra'
 
 def upload_file_to_do_spaces(file_path, key):
     try:
