@@ -94,6 +94,8 @@ def download_file(filename):
 @app.route('/list')
 def list_files():
     response = client.list_objects(Bucket=S3_BUCKET)
+    # Clear uploaded_files list
+    uploaded_files.clear()
     for obj in response['Contents']:
         print(obj['Key'])
         uploaded_files.append(obj['Key'])
