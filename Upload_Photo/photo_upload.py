@@ -6,6 +6,7 @@ access_key = 'your_access_key'
 secret_key = 'your_secret_key'
 space_name = 'your_space_name'
 
+# Upload a file to DigitalOcean Spaces
 def upload_file_to_do_spaces(file_path, key):
     try:
         s3 = boto3.client('s3',
