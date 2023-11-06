@@ -1,0 +1,28 @@
+from flask import Flask
+import os
+from flask_bcrypt import Bcrypt
+
+from Login.login import login
+from Upload_Photo.photo_upload import photo_upload
+
+app = Flask(__name__, static_url_path="", static_folder="../cse3311_frontend/build")
+app.config['BCRYPT_LOG_ROUNDS'] = 12
+app.register_blueprint(login)
+app.register_blueprint(photo_upload)
+
+@app.route('/')
+@app.route('/home')
+@app.route('/signup')
+@app.route('/forgot_password')
+@app.route('/reset_password/<token>')
+@app.route('/verify2FA/<email>')
+@app.route('/verify2FA_signup/<email>')
+@app.route('/photographer/<name>')
+@app.route('/photographer/<name>/<photoid>')
+
+def index_file(**kwarg):
+    return app.send_static_file('index.html')
+
+if __name__ == "__main__":
+    app.secret_key = os.getenv("SECRET_KEY")
+    app.run(debug=True, host="localhost", port=3000)

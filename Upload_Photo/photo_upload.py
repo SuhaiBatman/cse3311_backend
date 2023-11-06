@@ -5,6 +5,9 @@ import os
 import botocore.session
 from botocore.exceptions import NoCredentialsError
 from flask import Flask, request, render_template, send_from_directory, url_for
+from flask import Blueprint
+
+photo_upload = Blueprint("photo_upload", __name__)
 
 # DigitalOcean Spaces credentials
 access_key = os.getenv("DO_ACCESS_KEY")
@@ -13,17 +16,15 @@ space_name = 'PixEra'
 app = Flask(__name__)
 
 # Specify Digital Ocean Spaces settings
-S3_ENDPOINT = 'nyc3.digitaloceanspaces.com'
-S3_BUCKET = 'pixera'
-S3_ACCESS_KEY = 'your_access_key'
-S3_SECRET_KEY = 'your_secret_key'
-S3_REGION = 'nyc3'
+S3_ENDPOINT = os.getenv("S3_ENDPOINT")
+S3_BUCKET = os.getenv("S3_BUCKET")
+S3_REGION = os.getenv("S3_REGION")
 
 # Construct the URL for listing the contents of the bucket
 url = f'https://{S3_BUCKET}.{S3_REGION}.digitaloceanspaces.com/'
 
 # Configure S3 connection 
-s3 = boto3.client('s3', endpoint_url=f'https://{S3_BUCKET}.{S3_ENDPOINT}', aws_access_key_id=S3_ACCESS_KEY, aws_secret_access_key=S3_SECRET_KEY)
+s3 = boto3.client('s3', endpoint_url=f'https://{S3_BUCKET}.{S3_ENDPOINT}', aws_access_key_id=access_key, aws_secret_access_key=secret_key)
 
 # Configure a Client
 # https://docs.digitalocean.com/products/spaces/reference/s3-sdk-examples/
@@ -34,8 +35,8 @@ client = session.client('s3',
                         config=botocore.config.Config(s3={'addressing_style': 'virtual'}), 
                         region_name='nyc3',
                         endpoint_url='https://nyc3.digitaloceanspaces.com',
-                        aws_access_key_id=S3_ACCESS_KEY,
-                        aws_secret_access_key=S3_SECRET_KEY)
+                        aws_access_key_id=access_key,
+                        aws_secret_access_key=secret_key)
 
 # Specify the folder where uploaded photos will be stored
 UPLOAD_FOLDER = 'uploads'
@@ -48,11 +49,11 @@ uploaded_files = []
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-@app.route('/')
+@photo_upload.route('/upload_form')
 def index():
     return render_template('upload.html')
 
-@app.route('/upload', methods=['POST'])
+@photo_upload.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         return "No file part"
@@ -80,7 +81,7 @@ def upload_file():
             </form>
             '''
 
-@app.route('/download/pixera/pixera/<filename>')
+@photo_upload.route('/download/pixera/pixera/<filename>')
 def download_file(filename):
     try:
         # Download the file from Digital Ocean Spaces
@@ -96,7 +97,7 @@ def download_file(filename):
             </form>
             '''
 
-@app.route('/list')
+@photo_upload.route('/list')
 def list_files():
     response = client.list_objects(Bucket=S3_BUCKET)
     # Clear uploaded_files list
