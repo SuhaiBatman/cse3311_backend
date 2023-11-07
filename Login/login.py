@@ -23,20 +23,6 @@ from flask import Blueprint
 
 login = Blueprint("login", __name__)
 
-# @login.route('/')
-# @login.route('/home')
-# @login.route('/signup')
-# @login.route('/login')
-# @login.route('/forgot_password')
-# @login.route('/reset_password/<token>')
-# @login.route('/verify2FA/<email>')
-# @login.route('/verify2FA_signup/<email>')
-# @login.route('/photographer/<name>')
-# @login.route('/photographer/<name>/<photoid>')
-
-# def index_file(**kwarg):
-#     return app.send_static_file('index.html')
-
 # Define your environment variables here
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -93,8 +79,8 @@ def signup():
     users_collection.insert_one(user_data)
 
     # Set an HTTPOnly cookie with the user's email
-    response = make_response(redirect(url_for('resend_2fa', email=email)))
-    response.set_cookie('email', str(email), httponly=True)  # Set an HTTPOnly cookie
+    response = make_response(redirect(url_for('login.resend_2fa', email=email)))
+    response.set_cookie('email', str(email), httponly=True)
 
     return response
 
@@ -143,7 +129,7 @@ def signin():
                     resp = {'token': jwt_token_str}
                     return resp
             else:
-                return 'need to go to signup', 404
+                return 'need to go to forgot password', 404
         else:
             return 'Please check your email and or password', 400
 
@@ -215,7 +201,7 @@ def forgot_password():
             reset_tokens[token] = email
             
             # Send a reset email with a link using SendGrid
-            reset_link = url_for('reset_password', token=token, _external=True)
+            reset_link = url_for('login.reset_password', token=token, _external=True)
             message = Mail(
                 from_email='dev.pixera@gmail.com',
                 to_emails=[email],
@@ -280,7 +266,7 @@ def callback():
 
     with ThreadPoolExecutor() as executor:
         id_info = executor.submit(validate_and_get_id_info).result()
-
+    
     # Get user's Gmail email
     user_email = id_info.get("email")
 
@@ -294,25 +280,52 @@ def callback():
             "google_id": id_info.get("sub"),
             "email": user_email,
             "password": "",
-            "role": ""  # You can set a default role for new users if needed
         }
         users_collection.insert_one(user_data)
+    print(user_email)
+    redirect_url = url_for("login.google_oauth", email=user_email)
+    print("Hey Amey")
+    
+    # Redirect to the URL
+    return redirect(redirect_url)
 
-    # Create a JWT token and include claims, including "exp" for expiration and "role" for the user's role
-    expiration_time = int(time.time()) + 3600  # 1 hour from now
-    user_info = {
-        "google_id": id_info.get("sub"),
-        "exp": expiration_time,
-        "role": existing_user.get("role", "")  # Get the user's role or use a default if not present
-    }
-    jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
-    jwt_token_str = jwt_token.decode("utf-8")
+@login.route("/google_oauth/<email>")
+def google_oauth(email):
+    if request.method == 'POST':
+        data = request.json  # Assuming the form data is sent as JSON
 
-    # Set the JWT token as an HTTPOnly cookie
-    response = make_response(redirect('/home'))
-    response.set_cookie('session', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
+        # Extract form fields
+        username = data.get('username')
+        country = data.get('country')
+        city = data.get('city')
+        role = data.get('role')
+        
+        users_collection.update_one({'email': email}, {'$set': {'username': username}}, {'$set': {'country': country}}, {'$set': {'city': city}}, {'$set': {'role': role}})
+        
+        # Create a JWT token and include claims, including "exp" for expiration and "role" for the user's role
+        expiration_time = int(time.time()) + 3600  # 1 hour from now
+        user_info = {
+            "gmail": email,
+            "username": username,
+            "password": "",
+            "country": country,
+            "city": city,
+            "role": role,
+            "exp": expiration_time
+        }
+        jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
+        jwt_token_str = jwt_token
 
-    return response
+        response = make_response(redirect('/home'))
+        response.set_cookie('session', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
+
+        return response
+
+        response = {'message': 'Form submitted successfully'}
+        return jsonify(response), 200
+    else:
+        response = {'message': 'Invalid request'}
+        return jsonify(response), 400
 
 @login.route("/logout")
 def logout():
