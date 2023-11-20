@@ -62,22 +62,30 @@ def upload_file():
     if file and allowed_file(file.filename):
         try:
             filename = secure_filename(file.filename)
-            key = f'{username}/{title}'
+            key = f'{username}/Photos/{title}'
     
             metadata = {
                 'description': description,
                 'tags': tags
             }
 
+            # Get the file extension
+            file_extension = filename.rsplit('.', 1)[1].lower()
+
             s3.upload_fileobj(
                 file,
                 S3_BUCKET,
                 key,
-                ExtraArgs={'Metadata': metadata}
+                ExtraArgs={
+                    'Metadata': metadata,
+                    'ContentType': f'image/{file_extension}',  # Set content type based on the file extension
+                }
             )
             
+            mongo_key = title
+            
             # Store the image key in MongoDB
-            mongo_collection.insert_one({'username': username, 'title': title, 'key': key})
+            mongo_collection.insert_one({'username': username, 'title': title, 'key': mongo_key})
 
             # Initialize likes and dislikes for the new photo
             photo_likes_dislikes[title] = {'likes': 0, 'dislikes': 0}
@@ -99,8 +107,9 @@ def get_file_list():
         user_keys = [entry['key'] for entry in mongo_collection.find({'username': username})]
 
         # Construct full URLs for each image using the keys
-        base_url = f'https://cloud.digitalocean.com/spaces/pixera?path=pixera'
-        image_urls = [f'{base_url}/{key}' for key in user_keys]
+        ## https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/sahduahsjudi/test1.jpg
+        base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/'
+        image_urls = [f'{base_url}{key}' for key in user_keys]
         print(image_urls)
 
         return jsonify(image_urls), 200
