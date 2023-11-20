@@ -4,11 +4,10 @@ from flask_mail import Mail, Message
 import random
 import string
 from pymongo import MongoClient
-from pymongo.server_api import ServerApi
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 import pyotp
-from flask_bcrypt import Bcrypt
+from passlib.hash import pbkdf2_sha256
 import pathlib
 import requests
 from google.oauth2 import id_token
@@ -20,6 +19,10 @@ import jwt
 import time
 import os
 from flask import Blueprint
+from dotenv import load_dotenv
+from bson import ObjectId  # Import ObjectId from pymongo library
+
+load_dotenv()
 
 login = Blueprint("login", __name__)
 
@@ -30,7 +33,7 @@ client_secrets_file = os.path.join(pathlib.Path(__file__).parent, "client_secret
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 TOTP_SECRET = os.getenv("TOTP_SECRET")
 
-mongo_client = MongoClient(os.getenv("MONGO_URL"), server_api=ServerApi('1'))
+mongo_client = MongoClient(os.getenv("MONGO_URL"))
 db = mongo_client['PixEraDB']
 users_collection = db['Users']
 
@@ -46,90 +49,116 @@ store_totp = {}
 
 @login.route('/signup_user', methods=['POST'])
 def signup():
-    email = request.form['email']
-    password = request.form['password']
-    captcha_checked = request.form.get('captcha_checkbox')  # Check if the checkbox is checked
-    role = request.form.get('role')  # Get the role from the form
-
-    if not captcha_checked:
-        return jsonify({'message': 'Please complete the CAPTCHA.'}), 400
+    data = request.get_json()
+    firstName = data.get('firstName')
+    lastName = data.get('lastName')
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    country = data.get('country')
+    city = data.get('city')
+    role = data.get('role')
 
     # Check if the user already exists
     user = users_collection.find_one({'email': email})
 
     if user:
-        # Hash the password using bcrypt
-        hashed_password = bcrypt.generate_password_hash(password).decode(os.getenv("DECODE_ALGORITHM"))
-        if user["password"] == "":
-            # Update the user's password and role
-            users_collection.update_one({'email': email}, {'$set': {'password': hashed_password, 'role': role}})
-            return jsonify({'message': 'Password updated successfully.'})
+        return {'message': 'User already exists'}, 202
 
-        return jsonify({'message': 'User already exists'})
-
-    users_collection.create_index("expirationDate", expireAfterSeconds=0)
+    users_collection.create_index("expirationDate", expireAfterSeconds=3600)
 
     # The document will be automatically deleted after the expiration date has passed.
-    expiration_date = datetime.datetime.utcnow() + timedelta(seconds=120)  # Set the expiration date to one hour from now
-    # Hash the password using bcrypt
-    hashed_password = bcrypt.generate_password_hash(password).decode(os.getenv("DECODE_ALGORITHM"))
-    user_data = {'email': email, 'password': hashed_password, 'role': role, "expirationDate": expiration_date}
+    expiration_time = int(time.time()) + 3600  # 1 hour from now
+    # Hash the password using pbkdf2_sha256
+    hashed_password = pbkdf2_sha256.using(rounds=1000).hash(password)
+
+    user_data = {
+        'firstName': firstName,
+        'lastName': lastName,
+        'username': username,
+        'email': email,
+        'password': hashed_password,
+        'country': country,
+        'city': city,
+        'role': role,
+        'expirationDate': expiration_time
+    }
 
     # Store the user in the database
-    users_collection.insert_one(user_data)
+    result = users_collection.insert_one(user_data)
 
-    # Set an HTTPOnly cookie with the user's email
-    response = make_response(redirect(url_for('login.resend_2fa', email=email)))
-    response.set_cookie('email', str(email), httponly=True)
+    # Convert the ObjectId to its string representation
+    user_data['_id'] = str(result.inserted_id)
+    
+    user_token = {
+        'firstName': firstName,
+        'lastName': lastName,
+        'username': username,
+        'email': email,
+        'country': country,
+        'city': city,
+        'role': role,
+        'exp': expiration_time
+    }
 
-    return response
+    jwt_token = jwt.encode(user_token, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
+    jwt_token_str = jwt_token.decode("utf-8")
 
+    if jwt_token_str:
+        # Create a response with a custom header
+        response = make_response({'message': 'Login successful'})
+        response.headers['Authorization'] = f'Bearer {jwt_token_str}'
+        return response, 200
+    
 @login.route('/login', methods=['POST'])
 def signin():
     if request.method == 'POST':
-        data = request.get_json()  # Parse the request body as JSON
-        email = data.get('email')  # Access 'new_password' from the JSON data
+        data = request.get_json()
+        email = data.get('email')
         password = data.get('password')
+        hashed_password = pbkdf2_sha256.using(rounds=1000).hash(password)
         user = users_collection.find_one({'email': email})
-        
-        if user:
-            # Verify the password using check_password_hash
-            if user["password"] != "":
-                if bcrypt.check_password_hash(user['password'], password):
-                    # The password is verified
-                    totp = pyotp.TOTP(TOTP_SECRET)
-                    token = totp.now()
-                    store_totp[email] = token
-                    # Send the TOTP token to the user's email
-                    message = Mail(
-                        from_email='dev.pixera@gmail.com',
-                        to_emails=[email],
-                        subject='Two-Factor Authentication',
-                        plain_text_content=f'Your TOTP token is: {token}'
-                    )
-                    try:
-                        sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
-                        response = sg.send(message)
-                        flash('A TOTP token has been sent to your email. Please check your email and enter the token.')
-                    except Exception:
-                        flash('Failed to send the TOTP token.')
-                    
-                    expiration_time = int(time.time()) + 3600  # 1 hour from now
-                    user_info = {
-                        "email": email,
-                        "exp": expiration_time,
-                        "role": user.get("role")
-                    }
-                    jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
-                    jwt_token_str = jwt_token.decode("utf-8")
 
-                    # Set the JWT token as an HTTPOnly cookie
-                    response = make_response(redirect('/home'))
-                    response.set_cookie('session', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
-                    resp = {'token': jwt_token_str}
-                    return resp
-            else:
-                return 'need to go to forgot password', 404
+        if user:
+            if pbkdf2_sha256.verify(password, user['password']):
+                # The password is verified
+                totp = pyotp.TOTP(TOTP_SECRET)
+                token = totp.now()
+                store_totp[email] = token
+
+                # Send the TOTP token to the user's email
+                message = Mail(
+                    from_email='dev.pixera@gmail.com',
+                    to_emails=[email],
+                    subject='Two-Factor Authentication',
+                    plain_text_content=f'Your TOTP token is: {token}'
+                )
+                try:
+                    sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
+                    response = sg.send(message)
+                    flash('A TOTP token has been sent to your email. Please check your email and enter the token.')
+                except Exception:
+                    flash('Failed to send the TOTP token.')
+
+                expiration_time = int(time.time()) + 3600  # 1 hour from now
+                user_info = {
+                    'firstName': user.get('firstName'),
+                    'lastName': user.get('lastName'),
+                    'username': user.get('username'),
+                    'country': user.get('country'),
+                    'city': user.get('city'),
+                    "email": email,
+                    "exp": expiration_time,
+                    "role": user.get("role")
+                }
+                jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
+                jwt_token_str = jwt_token.decode("utf-8")
+
+                if jwt_token_str:
+                    # Create a response with a custom header
+                    response = make_response({'message': 'Login successful'})
+                    response.headers['Authorization'] = f'Bearer {jwt_token_str}'
+                    return response, 200
         else:
             return 'Please check your email and or password', 400
 
@@ -160,28 +189,13 @@ def resend_2fa(email):
 @login.route('/verify_2fa/<email>', methods=['POST'])
 def verify_2fa(email):
     if request.method == 'POST':
-        data = request.get_json()  # Parse the request body as JSON
+        data = request.get_json()
         totp_token = data.get('totp_token')
         if (totp_token == store_totp[email]):
             flash('2FA verification successful! You are now logged in.')
+            if(users_collection['expirationDate'] != None):
+                users_collection.update_one({'email': email}, {'$unset': {'expirationDate': 1}})
             del store_totp[email]
-            response_data = {'message': 'Success'}
-            return jsonify(response_data), 200
-        else:
-            flash('2FA verification failed. Please check the TOTP token.')
-            return "failed", 400
-    response_data = {'message': 'bruh'}
-    return jsonify(response_data), 200
-
-@login.route('/verify_2fa_signup/<email>', methods=['POST'])
-def verify_2fa_signup(email):
-    if request.method == 'POST':
-        data = request.get_json()  # Parse the request body as JSON
-        totp_token = data.get('totp_token')
-        totp = pyotp.TOTP(TOTP_SECRET)
-        if totp.verify(totp_token):
-            flash('2FA verification successful! You are now logged in.')
-            users_collection.update_one({'email': email}, {'$unset': {'expirationDate': 1}})
             response_data = {'message': 'Success'}
             return jsonify(response_data), 200
         else:
@@ -193,29 +207,35 @@ def verify_2fa_signup(email):
 @login.route('/forgot_password', methods=['POST'])
 def forgot_password():
     if request.method == 'POST':
-        email = request.form['email']
-        user = users_collection.find_one({'email': email})
-        if user:
-            # Generate a random reset token
-            token = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
-            reset_tokens[token] = email
-            
-            # Send a reset email with a link using SendGrid
-            reset_link = url_for('login.reset_password', token=token, _external=True)
-            message = Mail(
-                from_email='dev.pixera@gmail.com',
-                to_emails=[email],
-                subject='Password Reset',
-                plain_text_content=f'To reset your password, click the following link: {reset_link}'
-            )
-            try:
-                sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
-                response = sg.send(message)
-            except Exception:
-                flash('An error occurred while sending the password reset link.')
+        email = request.form.get('email')
+        if email:
+            user = users_collection.find_one({'email': email})
+            if user:
+                # Generate a random reset token
+                token = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
+                reset_tokens[token] = email
+                
+                # Send a reset email with a link using SendGrid
+                reset_link = url_for('login.reset_password', token=token, _external=True)
+                message = Mail(
+                    from_email='dev.pixera@gmail.com',
+                    to_emails=[email],
+                    subject='Password Reset',
+                    plain_text_content=f'To reset your password, click the following link: {reset_link}'
+                )
+                try:
+                    sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
+                    response = sg.send(message)
+                    return 'Password reset link sent successfully', 200
+                except Exception:
+                    flash('An error occurred while sending the password reset link.')
+                    return 'Failed', 403
+            else:
+                return 'User not found', 404
         else:
-            return 'not found', 404
-    return 'success', 200
+            return 'Invalid email', 400
+    else:
+        return 'Method not allowed', 405
 
 @login.route('/reset_password/<token>', methods=['POST'])
 def reset_password(token):
@@ -227,8 +247,8 @@ def reset_password(token):
             response_data = {'message': 'New password is required'}
             return jsonify(response_data), 400
 
-        # Hash the new password
-        hashed_password = bcrypt.generate_password_hash(new_password).decode(os.getenv("DECODE_ALGORITHM"))
+        # Hash the new password using pbkdf2_sha256
+        hashed_password = pbkdf2_sha256.using(rounds=1000).hash(new_password)
 
         # Update the user's password in the database
         users_collection.update_one({'email': email}, {'$set': {'password': hashed_password}})
@@ -266,7 +286,7 @@ def callback():
 
     with ThreadPoolExecutor() as executor:
         id_info = executor.submit(validate_and_get_id_info).result()
-    
+
     # Get user's Gmail email
     user_email = id_info.get("email")
 
@@ -280,71 +300,21 @@ def callback():
             "google_id": id_info.get("sub"),
             "email": user_email,
             "password": "",
+            "role": ""  # You can set a default role for new users if needed
         }
         users_collection.insert_one(user_data)
-    print(user_email)
-    redirect_url = url_for("login.google_oauth", email=user_email)
-    print("Hey Amey")
-    
-    # Redirect to the URL
-    return redirect(redirect_url)
 
-@login.route("/google_oauth/<email>")
-def google_oauth(email):
-    if request.method == 'POST':
-        data = request.json  # Assuming the form data is sent as JSON
+    # Create a JWT token and include claims, including "exp" for expiration and "role" for the user's role
+    expiration_time = int(time.time()) + 3600  # 1 hour from now
+    user_info = {
+        "google_id": id_info.get("sub"),
+        "email": user_email,
+        "exp": expiration_time,
+        "role": "" # Get the user's role or use a default if not present
+    }
+    jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
+    jwt_token_str = jwt_token.decode("utf-8")
 
-        # Extract form fields
-        username = data.get('username')
-        country = data.get('country')
-        city = data.get('city')
-        role = data.get('role')
-        
-        users_collection.update_one({'email': email}, {'$set': {'username': username}}, {'$set': {'country': country}}, {'$set': {'city': city}}, {'$set': {'role': role}})
-        
-        # Create a JWT token and include claims, including "exp" for expiration and "role" for the user's role
-        expiration_time = int(time.time()) + 3600  # 1 hour from now
-        user_info = {
-            "gmail": email,
-            "username": username,
-            "password": "",
-            "country": country,
-            "city": city,
-            "role": role,
-            "exp": expiration_time
-        }
-        jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
-        jwt_token_str = jwt_token
-
-        response = make_response(redirect('/home'))
-        response.set_cookie('session', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
-
-        return response
-
-        response = {'message': 'Form submitted successfully'}
-        return jsonify(response), 200
-    else:
-        response = {'message': 'Invalid request'}
-        return jsonify(response), 400
-
-@login.route("/logout")
-def logout():
-    response = make_response(redirect('/'))
-    response.delete_cookie('session')
-    return response
-
-@login.route("/verify_token", methods=["POST"])  # Use POST method to send the JWT token in the request body
-def verify():
-    data = request.get_json()  # Read the JSON request body
-    token = data.get("token")  # Extract the JWT token from the JSON data
-
-    try:
-        decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=[os.getenv("HASH")])
-        expire = decoded_token.get('exp', 0)
-        
-        if time.time() > expire:
-            return "Token has expired", 401
-        else:
-            return decoded_token
-    except jwt.DecodeError:
-        return "Invalid token", 401
+    response = make_response(redirect('/home'))
+    response.set_cookie('token', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
+    return response, 200

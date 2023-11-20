@@ -1,14 +1,14 @@
-from flask import Flask
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
-from flask_bcrypt import Bcrypt
 
 from Login.login import login
 from Upload_Photo.photo_upload import photo_upload
 
 app = Flask(__name__, static_url_path="", static_folder="../cse3311_frontend/build")
-app.config['BCRYPT_LOG_ROUNDS'] = 12
 app.register_blueprint(login)
 app.register_blueprint(photo_upload)
+CORS(app)
 
 @app.route('/')
 @app.route('/home')
@@ -16,10 +16,11 @@ app.register_blueprint(photo_upload)
 @app.route('/forgot_password')
 @app.route('/reset_password/<token>')
 @app.route('/google_oauth/<email>')
-@app.route('/verify2FA/<email>')
-@app.route('/verify2FA_signup/<email>')
+@app.route('/verify2FA')
+@app.route('/profile')
 @app.route('/photographer/<name>')
 @app.route('/photographer/<name>/<photoid>')
+@app.route('/user_profile')
 
 def index_file(**kwarg):
     return app.send_static_file('index.html')
