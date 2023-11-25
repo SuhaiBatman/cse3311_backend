@@ -304,41 +304,105 @@ def callback():
             "google_id": id_info.get("sub"),
             "email": user_email,
             "password": "",
-            "role": ""  # You can set a default role for new users if needed
+            "role": "",  # You can set a default role for new users if needed
+            'description': 'Tell us about yourself!',
+            'twitterLink': 'https://twitter.com/',
+            'instaLink': 'https://www.instagram.com/',
+            'linkedInLink': 'https://www.linkedin.com/',
         }
         users_collection.insert_one(user_data)
 
-    # Create a JWT token and include claims, including "exp" for expiration and "role" for the user's role
-    expiration_time = int(time.time()) + 3600  # 1 hour from now
-    user_info = {
-        "google_id": id_info.get("sub"),
-        "email": user_email,
-        "exp": expiration_time,
-        "role": "" # Get the user's role or use a default if not present
-    }
-    jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
-    jwt_token_str = jwt_token.decode("utf-8")
+        # Create a JWT token and include claims, including "exp" for expiration and "role" for the user's role
+        expiration_time = int(time.time()) + 3600  # 1 hour from now
+        user_info = {
+            "google_id": id_info.get("sub"),
+            "email": user_email,
+            "exp": expiration_time,
+        }
+        jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
+        jwt_token_str = jwt_token.decode("utf-8")
 
-    response = make_response(redirect('/home'))
-    response.set_cookie('token', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
-    return response, 200
+        response = make_response(redirect('/google_oauth'))
+        response.set_cookie('token', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
+        return response, 200
+    elif existing_user:
+        # Create a JWT token and include claims, including "exp" for expiration and "role" for the user's role
+        expiration_time = int(time.time()) + 3600  # 1 hour from now
+        user_info = {
+            "google_id": id_info.get("sub"),
+            'firstName': existing_user['firstName'],
+            'lastName': existing_user['lastName'],
+            'username': existing_user['username'],
+            'country': existing_user['country'],
+            'city': existing_user['city'],
+            "email": user_email,
+            "exp": expiration_time,
+            "role": existing_user['role'],
+            'description': existing_user['description'],
+            'twitterLink': existing_user['twitterLink'],
+            'instaLink': existing_user['instaLink'],
+            'linkedInLink': existing_user['linkedInLink'],
+        }
+        jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
+        jwt_token_str = jwt_token.decode("utf-8")
 
-@login.route('/deleteAccount', methods=['DELETE'])
-def delete_account():
+        response = make_response(redirect('/home'))
+        response.set_cookie('token', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
+        return response, 200
+
+@login.route('/google_oauth', methods=['POST'])
+def google_oauth():
     try:
-        data = request.get_json()
-        username = data.get('username')
+        data = request.form.to_dict()
+        # Retrieve the token from the request headers
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'message': 'Authorization token missing'}), 401
 
-        # Remove the user from the database
-        result = users_collection.delete_one({'username': username})
+        # Remove the 'Bearer ' prefix from the token
+        token = token.replace('Bearer ', '')
 
-        if result.deleted_count > 0:
-            response_data = {'message': 'Account deleted successfully'}
-            return jsonify(response_data), 200
-        else:
-            response_data = {'message': 'User not found'}
-            return jsonify(response_data), 404
+        # Decode and verify the token
+        try:
+            decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=[os.getenv("HASH")])
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'message': 'Invalid token'}), 401
 
+        # Extract user information from the decoded token
+        email = decoded_token['email']
+        user_data = {
+            'firstName': data.get('firstName'),
+            'lastName': data.get('lastName'),
+            'username': data.get('username'),
+            'email': decoded_token['email'],
+            'country': data.get('country'),
+            'city': data.get('city'),
+            'role': data.get('role'),
+        }
+
+        # Update the user's data in MongoDB
+        users_collection.update_one({'email': email}, {'$set': user_data})
+                        
+        user_token = {
+            'firstName': data.get('firstName'),
+            'lastName': data.get('lastName'),
+            'username': data.get('username'),
+            'email': decoded_token['email'],
+            'country': data.get('country'),
+            'city': data.get('city'),
+            'role': data.get('role'),
+            'exp': decoded_token['exp']
+        }
+        
+        # Encode a new token with updated user information
+        jwt_token = jwt.encode(user_token, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
+        jwt_token_str = jwt_token.decode("utf-8")
+
+        response = make_response({'message': 'Login successful'})
+        response.headers['Authorization'] = f'Bearer {jwt_token_str}'
+        return response, 200
     except Exception as e:
-        response_data = {'message': str(e)}
-        return jsonify(response_data), 500
+        return jsonify({'message': str(e)}), 500
+    

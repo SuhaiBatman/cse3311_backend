@@ -391,3 +391,35 @@ def delete_photo(title):
             return "User or Photo not found", 404
     except NoCredentialsError:
         return "Credentials not available", 404
+
+@photo_upload.route('/deleteAccount', methods=['DELETE'])
+def delete_account():
+    try:
+        data = request.get_json()
+        username = data.get('username')
+
+        # Specify the prefix for the user's objects in S3
+        prefix = f'{username}/'
+
+        # Get a list of objects with the specified prefix
+        objects_to_delete = s3.list_objects(Bucket=S3_BUCKET, Prefix=prefix)
+        
+        print('bruh')
+        
+        if "Contents" in objects_to_delete:
+            for object in objects_to_delete["Contents"]:
+                s3.delete_object(Bucket=S3_BUCKET, Key=object["Key"])
+
+        # Remove the user from the database
+        result = mongo_user_collection.delete_one({'username': username})
+
+        if result.deleted_count > 0:
+            response_data = {'message': 'Account deleted successfully'}
+            return jsonify(response_data), 200
+        else:
+            response_data = {'message': 'User not found'}
+            return jsonify(response_data), 404
+
+    except Exception as e:
+        response_data = {'message': str(e)}
+        return jsonify(response_data), 500
