@@ -20,7 +20,7 @@ import time
 import os
 from flask import Blueprint
 from dotenv import load_dotenv
-from bson import ObjectId  # Import ObjectId from pymongo library
+from bson import ObjectId
 
 load_dotenv()
 
@@ -81,6 +81,10 @@ def signup():
         'country': country,
         'city': city,
         'role': role,
+        'description': 'Tell us about yourself!',
+        'twitterLink': 'https://twitter.com/',
+        'instaLink': 'https://www.instagram.com/',
+        'linkedInLink': 'https://www.linkedin.com/',
         'expirationDate': expiration_time
     }
 
@@ -318,3 +322,23 @@ def callback():
     response = make_response(redirect('/home'))
     response.set_cookie('token', jwt_token_str, expires=datetime.utcnow() + timedelta(hours=1))
     return response, 200
+
+@login.route('/deleteAccount', methods=['DELETE'])
+def delete_account():
+    try:
+        data = request.get_json()
+        username = data.get('username')
+
+        # Remove the user from the database
+        result = users_collection.delete_one({'username': username})
+
+        if result.deleted_count > 0:
+            response_data = {'message': 'Account deleted successfully'}
+            return jsonify(response_data), 200
+        else:
+            response_data = {'message': 'User not found'}
+            return jsonify(response_data), 404
+
+    except Exception as e:
+        response_data = {'message': str(e)}
+        return jsonify(response_data), 500
