@@ -406,3 +406,56 @@ def google_oauth():
     except Exception as e:
         return jsonify({'message': str(e)}), 500
     
+    
+@login.route('/request_booking', methods=['POST'])
+def request_booking():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if email:
+            user = users_collection.find_one({'email': email})
+            if user:
+                # Generate a random reset token
+                token = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(20))
+                reset_tokens[token] = email
+                
+                data = request.form.to_dict()
+                
+                try:
+                    decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=[os.getenv("HASH")])
+                except jwt.ExpiredSignatureError:
+                 return jsonify({'message': 'Token has expired'}), 401
+                except jwt.InvalidTokenError:
+                    return jsonify({'message': 'Invalid token'}), 401
+                
+                user_data = {
+                'firstName': data.get('firstName'),
+                'lastName': data.get('lastName'),
+                'username': data.get('username'),
+                'email': decoded_token['email'],
+                'country': data.get('country'),
+                'city': data.get('city'),
+                'role': data.get('role'),
+            }
+                
+                # Send a reset email with a link using SendGrid
+                request_link = url_for('login.request_booking', token=token, _external=True)
+                message = Mail(
+                    from_email='dev.pixera@gmail.com',
+                    to_emails=[email],
+                    subject='Booking Request',
+                    plain_text_content=[user_data]+f'To add this booking to your calendar, click the following link: {request_link}'
+                )
+                try:
+                    sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
+                    response = sg.send(message)
+                    return 'Password reset link sent successfully', 200
+                except Exception:
+                    flash('An error occurred while sending the password reset link.')
+                    return 'Failed', 403
+            else:
+                return 'User not found', 404
+        else:
+            return 'Invalid email', 400
+    else:
+        return 'Method not allowed', 405
+    
