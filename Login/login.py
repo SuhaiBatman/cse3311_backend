@@ -58,6 +58,7 @@ def signup():
     country = data.get('country')
     city = data.get('city')
     role = data.get('role')
+    photographertype = data.get('roleTags', [])  # Get tags or default to an empty list
 
     # Check if the user already exists
     user = users_collection.find_one({'email': email})
@@ -85,11 +86,17 @@ def signup():
         'twitterLink': 'https://twitter.com/',
         'instaLink': 'https://www.instagram.com/',
         'linkedInLink': 'https://www.linkedin.com/',
+        'photographertype': photographertype,
         'expirationDate': expiration_time
     }
 
-    # Store the user in the database
-    result = users_collection.insert_one(user_data)
+    username_exists = users_collection.find_one({'username': username})
+
+    if username_exists:
+        return "username already exists, please try again", 400
+    else:
+        # Store the user in the database
+        result = users_collection.insert_one(user_data)
 
     # Convert the ObjectId to its string representation
     user_data['_id'] = str(result.inserted_id)
@@ -102,6 +109,7 @@ def signup():
         'country': country,
         'city': city,
         'role': role,
+        'photographertype': photographertype,
         'exp': expiration_time
     }
 
@@ -153,6 +161,7 @@ def signin():
                     'city': user.get('city'),
                     "email": email,
                     "exp": expiration_time,
+                    "photographertype": user.get('photographertype'),
                     "role": user.get("role")
                 }
                 jwt_token = jwt.encode(user_info, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
@@ -353,7 +362,7 @@ def callback():
 @login.route('/google_oauth', methods=['POST'])
 def google_oauth():
     try:
-        data = request.form.to_dict()
+        data = request.get_json()
         # Retrieve the token from the request headers
         token = request.headers.get('Authorization')
         if not token:
@@ -376,10 +385,11 @@ def google_oauth():
             'firstName': data.get('firstName'),
             'lastName': data.get('lastName'),
             'username': data.get('username'),
-            'email': decoded_token['email'],
+            'email': email,
             'country': data.get('country'),
             'city': data.get('city'),
             'role': data.get('role'),
+            'photographertype': data.get('roleTags', [])
         }
 
         # Update the user's data in MongoDB
@@ -393,6 +403,7 @@ def google_oauth():
             'country': data.get('country'),
             'city': data.get('city'),
             'role': data.get('role'),
+            'photographertype': data.get('roleTags'),
             'exp': decoded_token['exp']
         }
         
