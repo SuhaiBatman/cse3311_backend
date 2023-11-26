@@ -129,17 +129,16 @@ def search_by_tags():
     except Exception as e:
         return {'message': str(e)}, 500
 
-
 @photo_upload.route('/all_photographers', methods=['POST'])
 def list_photographers():
     try:
         data = request.get_json()
         role = data.get('role')
-
+        
         # Retrieve all photographers with the specified role
-        photographers = mongo_collection.find({'role': role}, {'username': 1})
-
-        image_info_list = []
+        photographers = mongo_user_collection.find({'role': role})
+                
+        photographer_data = {}
 
         # Iterate through each photographer and retrieve their image keys
         for photographer in photographers:
@@ -148,9 +147,12 @@ def list_photographers():
 
             # Construct full URLs for each image using the keys
             base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/Photos/'
-            image_info_list.extend([{'url': f'{base_url}{key}', 'filename': key} for key in user_keys])
+            photos = [{'url': f'{base_url}{key}', 'filename': key, 'username': username} for key in user_keys]
 
-        return jsonify(image_info_list), 200
+            # Store the photos in the dictionary with the photographer's username as the key
+            photographer_data[username] = {'photos': photos}
+                        
+        return jsonify(photographer_data), 200
 
     except Exception as e:
         return {'message': str(e)}, 500
