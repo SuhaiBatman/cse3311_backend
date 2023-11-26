@@ -381,19 +381,25 @@ def google_oauth():
 
         # Extract user information from the decoded token
         email = decoded_token['email']
+        username = data.get('username')
         user_data = {
             'firstName': data.get('firstName'),
             'lastName': data.get('lastName'),
-            'username': data.get('username'),
+            'username': username,
             'email': email,
             'country': data.get('country'),
             'city': data.get('city'),
             'role': data.get('role'),
             'photographertype': data.get('roleTags', [])
         }
+        
+        username_exists = users_collection.find_one({'username': username})
 
-        # Update the user's data in MongoDB
-        users_collection.update_one({'email': email}, {'$set': user_data})
+        if username_exists:
+            return "username already exists, please try again", 400
+        else:
+            # Update the user's data in MongoDB
+            users_collection.update_one({'email': email}, {'$set': user_data})
                         
         user_token = {
             'firstName': data.get('firstName'),
