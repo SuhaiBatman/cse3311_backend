@@ -57,6 +57,7 @@ def upload_file():
     
     description = data.get('description')
     tags = data.get('tags')
+    tags_list = json.loads(tags)
     
     if not access_key or not secret_key:
         return "AWS credentials not available", 401
@@ -90,9 +91,9 @@ def upload_file():
             
             # Initialize likes and dislikes for the new photo
             photo_likes_dislikes[title] = {'likes': 0, 'dislikes': 0}
-                        
+            print(type(tags_list))     
             # Store the image key in MongoDB
-            mongo_collection.insert_one({'username': username, 'title': title, 'key': filename, 'likes_dislikes': photo_likes_dislikes[title]})
+            mongo_collection.insert_one({'username': username, 'title': title, 'key': filename, 'likes_dislikes': photo_likes_dislikes[title],'tags':tags_list})
 
 
             return "File uploaded successfully", 200
@@ -100,6 +101,36 @@ def upload_file():
             return "Upload failed due to invalid credentials", 500
     else:
         return "Invalid file type", 400
+    
+@photo_upload.route('/search', methods=['POST'])
+def search_by_tags():
+    data = request.form.to_dict()
+    tag = data.get('tags')
+    tags = json.loads(tag)
+    try:
+        matching_photos = mongo_collection.find({"tags": {"$in": tags}})
+
+        image_info_list = []
+        for photo in matching_photos:
+            username = photo['username']  # Retrieve username
+            photo_key = photo['key']  # Retrieve photo key
+
+            # Construct the URL for the image
+            base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/Photos/'
+            image_url = f'{base_url}{photo_key}'
+
+            image_info = {
+                'url': image_url,
+                'filename': photo_key
+            }
+            image_info_list.append(image_info)
+
+        return jsonify(image_info_list), 200
+    except Exception as e:
+        return {'message': str(e)}, 500
+
+
+
 
 @photo_upload.route('/photo_upload/list', methods=['POST'])
 def get_file_list():
