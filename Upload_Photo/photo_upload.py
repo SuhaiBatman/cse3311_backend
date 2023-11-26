@@ -282,14 +282,6 @@ def fetch_Image():
     except Exception as e:
         return {'message': str(e)}, 500
 
-@photo_upload.route('/download/<filename>')
-def download_file(filename):
-    try:
-        s3.download_file(S3_BUCKET, filename, filename)
-        return "File downloaded successfully", 200
-    except NoCredentialsError:
-        return "Credentials not available", 404
-
 @photo_upload.route('/like/<title>', methods=['POST'])
 def like_photo(title):
     try:
@@ -399,16 +391,16 @@ def delete_account():
         username = data.get('username')
 
         # Specify the prefix for the user's objects in S3
-        prefix = f'{username}/'
+        # prefix = f'{username}/'
 
-        # Get a list of objects with the specified prefix
-        objects_to_delete = s3.list_objects(Bucket=S3_BUCKET, Prefix=prefix)
+        # # Get a list of objects with the specified prefix
+        # objects_to_delete = s3.list_objects(Bucket=S3_BUCKET, Prefix=prefix)
         
-        print('bruh')
+        # print('bruh')
         
-        if "Contents" in objects_to_delete:
-            for object in objects_to_delete["Contents"]:
-                s3.delete_object(Bucket=S3_BUCKET, Key=object["Key"])
+        # if "Contents" in objects_to_delete:
+        #     for object in objects_to_delete["Contents"]:
+        #         s3.delete_object(Bucket=S3_BUCKET, Key=object["Key"])
 
         # Remove the user from the database
         result = mongo_user_collection.delete_one({'username': username})
