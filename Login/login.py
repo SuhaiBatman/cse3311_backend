@@ -21,6 +21,7 @@ import os
 from flask import Blueprint
 from dotenv import load_dotenv
 from bson import ObjectId
+import json
 
 load_dotenv()
 
@@ -36,6 +37,7 @@ TOTP_SECRET = os.getenv("TOTP_SECRET")
 mongo_client = MongoClient(os.getenv("MONGO_URL"))
 db = mongo_client['PixEraDB']
 users_collection = db['Users']
+mongo_collection = db['image_keys']
 
 flow = Flow.from_client_secrets_file(
     client_secrets_file=client_secrets_file,
@@ -121,6 +123,44 @@ def signup():
         response = make_response({'message': 'Login successful'})
         response.headers['Authorization'] = f'Bearer {jwt_token_str}'
         return response, 200
+    
+@login.route('/searchByPhotographerTag', methods=['POST'])
+def photographersearch():
+    data = request.form.to_dict()
+    tag = data.get('tags')
+    tags = json.loads(tag)
+    print("tags : ",tags)
+    try:
+        # Find matching photographers based on tags
+        matching_photographers = users_collection.find({"photographertype": {"$in": tags}})
+        print(matching_photographers[0])
+        # Extract usernames of matching photographers
+        usernames = [photographer['username'] for photographer in matching_photographers]
+        print(usernames)
+        # Find matching photos based on usernames
+        matching_photos = mongo_collection.find({"username": {"$in": usernames}})
+        print(matching_photos)
+        image_info_list = []
+        for photo in matching_photos:
+            username = photo['username']  # Retrieve username
+            photo_key = photo['key']  # Retrieve photo key
+
+            # Construct the URL for the image
+            base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/Photos/'
+            image_url = f'{base_url}{photo_key}'
+
+            image_info = {
+                'url': image_url,
+                'filename': photo_key,
+                'username':username
+            }
+            image_info_list.append(image_info)
+
+        return jsonify(image_info_list), 200
+    except Exception as e:
+        print(e)
+        return {'message': str(e)}, 500
+
     
 @login.route('/login', methods=['POST'])
 def signin():

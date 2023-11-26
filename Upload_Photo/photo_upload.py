@@ -121,7 +121,8 @@ def search_by_tags():
 
             image_info = {
                 'url': image_url,
-                'filename': photo_key
+                'filename': photo_key,
+                'username':username
             }
             image_info_list.append(image_info)
 
