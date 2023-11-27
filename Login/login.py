@@ -448,13 +448,14 @@ def request_booking():
             }
                 
                 # Send a reset email with a link using SendGrid
-                request_link = url_for('login.request_booking', token=token, _external=True)
+                request_link = url_for('login.proposal', name=name, token=token, _external=True)
                 message = Mail(
                     from_email='dev.pixera@gmail.com',
                     to_emails=[photographerEmail],
                     subject='Booking Request',
-                    plain_text_content=[user_data]+f'To add this booking to your calendar, click the following link: {request_link}'
+                    plain_text_content=f'{user_data}' +f'To add this booking to your calendar, click the following link: {request_link}'
                 )
+                print(message)
                 try:
                     sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
                     response = sg.send(message)
@@ -469,3 +470,50 @@ def request_booking():
     else:
         return 'Method not allowed', 405
     
+@login.route('/<name>/proposal', methods=['POST'])
+def proposal(token):
+    if request.method == 'POST':
+        token = request.headers.get('Authorization')
+        token = token.replace('Bearer ', '')
+        decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=[os.getenv("HASH")])
+        email = decoded_token['email']
+        
+        data = request.get_json()
+        name = data.get('name')
+        
+        if email:
+            user = users_collection.update_one({'username': name})
+            
+            
+            photographerEmail = user['email']
+            print(photographerEmail)
+            
+            if user:
+                user_data = {
+                'firstName': decoded_token['firstName'],
+                'lastName': decoded_token['lastName'],
+                'username': decoded_token['username'],
+                'email': decoded_token['email'],
+            }
+                
+                # Send a reset email with a link using SendGrid
+                request_link = url_for('login.proposal', token=token, _external=True)
+                message = Mail(
+                    from_email='dev.pixera@gmail.com',
+                    to_emails=[photographerEmail],
+                    subject='Booking Request',
+                    plain_text_content=f'{user_data}' +f'To add this booking to your calendar, click the following link: {request_link}'
+                )
+                try:
+                    sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
+                    response = sg.send(message)
+                    return 'link sent successfully', 200
+                except Exception:
+                    flash('An error occurred')
+                    return 'Failed', 403
+            else:
+                return 'User not found', 404
+        else:
+            return 'Invalid email', 400
+    else:
+        return 'Method not allowed', 405
