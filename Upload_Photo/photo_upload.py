@@ -91,7 +91,6 @@ def upload_file():
             
             # Initialize likes and dislikes for the new photo
             photo_likes_dislikes[title] = {'likes': 0, 'dislikes': 0}
-            print(type(tags_list))     
             # Store the image key in MongoDB
             mongo_collection.insert_one({'username': username, 'title': title, 'key': filename, 'likes_dislikes': photo_likes_dislikes[title],'tags':tags_list, 'description': description})
 
@@ -106,7 +105,6 @@ def search_by_tags():
     data = request.form.to_dict()
     tag = data.get('tags')
     tags = json.loads(tag)
-    print(tags)
     try:
         matching_photos = mongo_collection.find({"tags": {"$in": tags}})
 
@@ -265,9 +263,7 @@ def save_edited_data():
 
         # Update the user's data in MongoDB
         mongo_user_collection.update_one({'username': username}, {'$set': edited_data})
-        
-        print(decoded_token)
-                
+                        
         user_token = {
             'firstName': decoded_token['firstName'],
             'lastName': decoded_token['lastName'],
@@ -279,8 +275,6 @@ def save_edited_data():
             'exp': decoded_token['exp']
         }
         
-        print(user_token)
-
         # Encode a new token with updated user information
         jwt_token = jwt.encode(user_token, JWT_SECRET_KEY, algorithm=os.getenv("HASH"))
         jwt_token_str = jwt_token.decode("utf-8")
@@ -461,18 +455,6 @@ def delete_account():
     try:
         data = request.get_json()
         username = data.get('username')
-
-        # Specify the prefix for the user's objects in S3
-        # prefix = f'{username}/'
-
-        # # Get a list of objects with the specified prefix
-        # objects_to_delete = s3.list_objects(Bucket=S3_BUCKET, Prefix=prefix)
-        
-        # print('bruh')
-        
-        # if "Contents" in objects_to_delete:
-        #     for object in objects_to_delete["Contents"]:
-        #         s3.delete_object(Bucket=S3_BUCKET, Key=object["Key"])
 
         # Remove the user from the database
         result = mongo_user_collection.delete_one({'username': username})

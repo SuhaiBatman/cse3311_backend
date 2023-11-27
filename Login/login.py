@@ -131,31 +131,12 @@ def photographersearch():
     data = request.form.to_dict()
     tag = data.get('tags')
     tags = json.loads(tag)
-    print("tags : ",tags)
     try:
         # Find matching photographers based on tags
         matching_photographers = users_collection.find({"photographertype": {"$in": tags}})
-        print(matching_photographers[0])
         # Extract usernames of matching photographers
         usernames = [photographer['username'] for photographer in matching_photographers]
-        # print(usernames)
-        # Find matching photos based on usernames
-        # matching_photos = mongo_collection.find({"username": {"$in": usernames}})
-        # print(matching_photos)
         image_info_list = []
-        # for photo in matching_photos:
-        #     username = photo['username']  # Retrieve username
-        #     photo_key = photo['key']  # Retrieve photo key
-
-        #     # Construct the URL for the image
-        #     base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/Photos/'
-        #     image_url = f'{base_url}{photo_key}'
-
-        #     image_info = {
-        #         'filename': photo_key,
-        #         'username':username
-        #     }
-        #     image_info_list.append(image_info)
         for username in usernames:
             image_info={
                 'username':username
@@ -164,7 +145,6 @@ def photographersearch():
 
         return jsonify(image_info_list), 200
     except Exception as e:
-        print(e)
         return {'message': str(e)}, 500
 
     
@@ -322,7 +302,6 @@ def reset_password(token):
 @login.route("/login_user")
 def login_user():
     authorization_url, state = flow.authorization_url()
-    print(authorization_url)
     return redirect(authorization_url)
 
 @login.route("/callback")
@@ -494,8 +473,7 @@ def request_booking():
                     'quote_ID': quote_id,
                     'photographerUsername': name,
                     'clientEmail': decoded_token['email'],
-                    'quote': quote,
-                    'timestamp': datetime.utcnow()
+                    'quote': quote
                 }
                 date_collection.insert_one(date_data)
                                 
@@ -561,13 +539,16 @@ def get_quotes(username):
     for quote in quotes:
         # Access the 'type' attribute from the quote object
         quote_type = quote.get('quote', {}).get('type', '')
+        actual_quote = quote.get('quote', {})
 
         events.append({
-            'id': str(quote['_id']),  # Assuming _id is ObjectId, convert it to string
+            'id': str(quote['_id']),
             'title': quote_type,
-            'start': quote['timestamp'],
-            'end': quote['timestamp'] + timedelta(hours=1),  # Adjust the end time as needed
-            'status': 'Accepted'  # You can add more information here
+            'startDay': actual_quote['sDay'],
+            'startTime': actual_quote['sTime'],
+            'endDay': actual_quote['eDay'],
+            'endTime': actual_quote['eTime'],
+            'status': 'Accepted'
         })
 
     return jsonify(events), 200
