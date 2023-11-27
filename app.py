@@ -22,7 +22,7 @@ CORS(app)
 @app.route('/photographer/<name>/<photoid>')
 @app.route('/user_profile')
 @app.route('/request_booking')
-@app.route('/<name>/proposal')
+@app.route('/proposal')
 
 def index_file(**kwarg):
     return app.send_static_file('index.html')
