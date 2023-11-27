@@ -455,30 +455,6 @@ def delete_account():
     try:
         data = request.get_json()
         username = data.get('username')
-        
-        # Find the user in the MongoDB collection
-        user = mongo_collection.find_one({'username': username, 'key': title})
-
-        if user:
-            # Query MongoDB to retrieve keys based on the username
-            image_data = mongo_collection.find({'username': username_to_search})
-            
-            for image in image_data:
-                filename = image["key"]
-                # Delete all images from DigitalOcean Spaces Photos folder
-                subpath = "Photos"
-                key = f'{username}/{subpath}/{filename}'
-                s3.delete_object(Bucket=S3_BUCKET, Key=key)
-
-                # Delete all images from DigitalOcean Spaces ProfileImage folder
-                subpath = "ProfileImage"
-                key = f'{username}/{subpath}/{filename}'
-                s3.delete_object(Bucket=S3_BUCKET, Key=key)
-
-            return "Images deleted successfully", 200
-        else:
-            return "User or Photo not found", 404
-
 
         # Remove the user from the database
         result = mongo_user_collection.delete_one({'username': username})
