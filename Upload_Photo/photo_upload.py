@@ -107,6 +107,7 @@ def search_by_tags():
     data = request.form.to_dict()
     tag = data.get('tags')
     tags = json.loads(tag)
+    print(tags)
     try:
         matching_photos = mongo_collection.find({"tags": {"$in": tags}})
 

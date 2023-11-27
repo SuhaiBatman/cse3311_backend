@@ -136,22 +136,26 @@ def photographersearch():
         print(matching_photographers[0])
         # Extract usernames of matching photographers
         usernames = [photographer['username'] for photographer in matching_photographers]
-        print(usernames)
+        # print(usernames)
         # Find matching photos based on usernames
-        matching_photos = mongo_collection.find({"username": {"$in": usernames}})
-        print(matching_photos)
+        # matching_photos = mongo_collection.find({"username": {"$in": usernames}})
+        # print(matching_photos)
         image_info_list = []
-        for photo in matching_photos:
-            username = photo['username']  # Retrieve username
-            photo_key = photo['key']  # Retrieve photo key
+        # for photo in matching_photos:
+        #     username = photo['username']  # Retrieve username
+        #     photo_key = photo['key']  # Retrieve photo key
 
-            # Construct the URL for the image
-            base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/Photos/'
-            image_url = f'{base_url}{photo_key}'
+        #     # Construct the URL for the image
+        #     base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/Photos/'
+        #     image_url = f'{base_url}{photo_key}'
 
-            image_info = {
-                'url': image_url,
-                'filename': photo_key,
+        #     image_info = {
+        #         'filename': photo_key,
+        #         'username':username
+        #     }
+        #     image_info_list.append(image_info)
+        for username in usernames:
+            image_info={
                 'username':username
             }
             image_info_list.append(image_info)
