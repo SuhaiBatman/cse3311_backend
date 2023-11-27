@@ -22,6 +22,7 @@ from flask import Blueprint
 from dotenv import load_dotenv
 from bson import ObjectId
 import json
+import uuid
 
 load_dotenv()
 
@@ -38,6 +39,7 @@ mongo_client = MongoClient(os.getenv("MONGO_URL"))
 db = mongo_client['PixEraDB']
 users_collection = db['Users']
 mongo_collection = db['image_keys']
+date_collection = db['dates']
 
 flow = Flow.from_client_secrets_file(
     client_secrets_file=client_secrets_file,
@@ -467,7 +469,6 @@ def google_oauth():
     except Exception as e:
         return jsonify({'message': str(e)}), 500
     
-    
 @login.route('/request_booking', methods=['POST'])
 def request_booking():
     if request.method == 'POST':
@@ -478,35 +479,42 @@ def request_booking():
         
         data = request.get_json()
         name = data.get('name')
+        quote = data.get('quote')
         
         if email:
             user = users_collection.find_one({'username': name})
             photographerEmail = user['email']
-            print(photographerEmail)
+            
             if user:
-                user_data = {
-                'firstName': decoded_token['firstName'],
-                'lastName': decoded_token['lastName'],
-                'username': decoded_token['username'],
-                'email': decoded_token['email'],
-            }
-                
-                # Send a reset email with a link using SendGrid
-                request_link = url_for('login.proposal', name=name, token=token, _external=True)
+                # Generate a unique ID for the quote
+                quote_id = str(uuid.uuid4())
+
+                # Save the quote and quote_ID to the MongoDB collection
+                date_data = {
+                    'quote_ID': quote_id,
+                    'photographerUsername': name,
+                    'clientEmail': decoded_token['email'],
+                    'quote': quote,
+                    'timestamp': datetime.utcnow()
+                }
+                date_collection.insert_one(date_data)
+                                
+                # Include the quote_ID in the URL link
+                request_link = url_for('login.proposal', quote_id=quote_id, _external=True)
                 message = Mail(
                     from_email='dev.pixera@gmail.com',
                     to_emails=[photographerEmail],
                     subject='Booking Request',
-                    plain_text_content=f'{user_data}' +f'To add this booking to your calendar, click the following link: {request_link}'
+                    plain_text_content=f'To add this booking to your calendar, click the following link: {request_link}'
                 )
-                print(message)
+                
                 try:
                     sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
                     response = sg.send(message)
-                    return 'link sent successfully', 200
+                    return 'Link sent successfully', 200
                 except Exception:
-                    flash('An error occurred')
-                    return 'Failed', 403
+                    flash('An error occurred while sending the email.')
+                    return 'Failed to send email', 403
             else:
                 return 'User not found', 404
         else:
@@ -514,50 +522,15 @@ def request_booking():
     else:
         return 'Method not allowed', 405
     
-@login.route('/<name>/proposal', methods=['POST'])
-def proposal(token):
+@login.route('/proposal', methods=['POST'])
+def proposal(quote_id):
     if request.method == 'POST':
         token = request.headers.get('Authorization')
         token = token.replace('Bearer ', '')
         decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=[os.getenv("HASH")])
         email = decoded_token['email']
         
-        data = request.get_json()
-        name = data.get('name')
-        
-        if email:
-            user = users_collection.update_one({'username': name})
-            
-            
-            photographerEmail = user['email']
-            print(photographerEmail)
-            
-            if user:
-                user_data = {
-                'firstName': decoded_token['firstName'],
-                'lastName': decoded_token['lastName'],
-                'username': decoded_token['username'],
-                'email': decoded_token['email'],
-            }
-                
-                # Send a reset email with a link using SendGrid
-                request_link = url_for('login.proposal', token=token, _external=True)
-                message = Mail(
-                    from_email='dev.pixera@gmail.com',
-                    to_emails=[photographerEmail],
-                    subject='Booking Request',
-                    plain_text_content=f'{user_data}' +f'To add this booking to your calendar, click the following link: {request_link}'
-                )
-                try:
-                    sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
-                    response = sg.send(message)
-                    return 'link sent successfully', 200
-                except Exception:
-                    flash('An error occurred')
-                    return 'Failed', 403
-            else:
-                return 'User not found', 404
-        else:
-            return 'Invalid email', 400
+        quote = date_collection.find_one({'quote_ID': quote_id})
+        return(quote)
     else:
         return 'Method not allowed', 405
