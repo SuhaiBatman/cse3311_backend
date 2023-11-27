@@ -93,8 +93,7 @@ def upload_file():
             photo_likes_dislikes[title] = {'likes': 0, 'dislikes': 0}
             print(type(tags_list))     
             # Store the image key in MongoDB
-            mongo_collection.insert_one({'username': username, 'title': title, 'key': filename, 'likes_dislikes': photo_likes_dislikes[title],'tags':tags_list})
-
+            mongo_collection.insert_one({'username': username, 'title': title, 'key': filename, 'likes_dislikes': photo_likes_dislikes[title],'tags':tags_list, 'description': description})
 
             return "File uploaded successfully", 200
         except NoCredentialsError:
@@ -328,17 +327,32 @@ def get_like_dislike_count(title):
         return "Credentials not available", 403
     
 @photo_upload.route('/fetch_image', methods=['POST'])
-def fetch_Image():
+def fetch_image():
     try:
         data = request.form.to_dict()
         username = data.get('username')
         base_url = f'https://pixera.nyc3.cdn.digitaloceanspaces.com/pixera/{username}/Photos/'
         key = data.get('key')
         image_url = f'{base_url}{key}'
-        
-        return jsonify(image_url), 200
+
+        image = mongo_collection.find_one({'username': username, 'key': key})
+
+        response_data = {
+            'image_url': image_url,
+            'title': image['title'],
+        }
+
+        # Check if 'tags' and 'description' exist before adding to the response
+        if 'tags' in image:
+            response_data['tags'] = image['tags']
+
+        if 'description' in image:
+            response_data['description'] = image['description']
+
+        return jsonify(response_data), 200
     except Exception as e:
         return {'message': str(e)}, 500
+
 
 @photo_upload.route('/like/<title>', methods=['POST'])
 def like_photo(title):

@@ -522,15 +522,52 @@ def request_booking():
     else:
         return 'Method not allowed', 405
     
-@login.route('/proposal', methods=['POST'])
+@login.route('/proposal/<quote_id>', methods=['POST'])
 def proposal(quote_id):
     if request.method == 'POST':
-        token = request.headers.get('Authorization')
-        token = token.replace('Bearer ', '')
-        decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=[os.getenv("HASH")])
-        email = decoded_token['email']
-        
         quote = date_collection.find_one({'quote_ID': quote_id})
-        return(quote)
+        
+        if quote:
+            # Convert ObjectId to string
+            quote['_id'] = str(quote['_id'])
+            return jsonify(quote)
+        else:
+            return 'Quote not found', 404
     else:
         return 'Method not allowed', 405
+    
+@login.route('/proposal/<quote_id>/accept', methods=['POST'])
+def proposal_accept(quote_id):
+    if request.method == 'POST':
+        quote = date_collection.find_one({'quote_ID': quote_id})
+
+        if quote:
+            # Update the quote to mark it as accepted
+            date_collection.update_one({'quote_ID': quote_id}, {'$set': {'accepted': True}})
+
+            return 'Quote accepted successfully', 200
+        else:
+            return 'Quote not found', 404
+    else:
+        return 'Method not allowed', 405
+    
+@login.route('/get_quotes/<username>', methods=['GET'])
+def get_quotes(username):
+    # Fetch only accepted quotes for the given username
+    quotes = date_collection.find({'photographerUsername': username, 'accepted': True})
+
+    # Prepare the events array
+    events = []
+    for quote in quotes:
+        # Access the 'type' attribute from the quote object
+        quote_type = quote.get('quote', {}).get('type', '')
+
+        events.append({
+            'id': str(quote['_id']),  # Assuming _id is ObjectId, convert it to string
+            'title': quote_type,
+            'start': quote['timestamp'],
+            'end': quote['timestamp'] + timedelta(hours=1),  # Adjust the end time as needed
+            'status': 'Accepted'  # You can add more information here
+        })
+
+    return jsonify(events), 200
