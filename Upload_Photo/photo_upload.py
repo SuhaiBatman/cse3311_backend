@@ -184,11 +184,11 @@ def upload_profile_image():
         user = mongo_profile_collection.find_one({'username': username})
 
         # Delete the image from DigitalOcean Spaces
-        filename = user.get('prof_key')
-        s3.delete_object(Bucket=S3_BUCKET, Key=filename)
-        
-        # Delete the image entry from MongoDB
-        # mongo_profile_collection.delete_one({'username': username})
+        if(user):
+            filename = user.get('prof_key')
+            s3.delete_object(Bucket=S3_BUCKET, Key=filename)  
+            # Delete the image entry from MongoDB
+            mongo_profile_collection.delete_one({'username': username})
 
 
         if 'file' not in request.files:
